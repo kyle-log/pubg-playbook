@@ -61,7 +61,7 @@ A static web page that shows a high-resolution Taego map with fixed safe-positio
 - `styles.css`: map layout and pin styling.
 - `assets/taego-map-high.jpg`: 4096x4096 Taego map generated from PUBG official `api-assets`.
 - `assets/taego-map.webp`: older 1008x1008 map kept for reference.
-- Plane route drawing is supported from the map UI.
+- Plane route and safe circle drawing are supported from separate map controls.
 
 ### Deployment
 - GitHub Pages: https://kyle-log.github.io/pubg-playbook/
@@ -89,7 +89,29 @@ The MVP shell is working.
 - Pan is bounded inside the map.
 - Pins stay small while zooming.
 - Plane route drawing works by selecting a start and end point.
+- Safe circle drawing uses 8x8km map scale and phase-specific PUBG white-circle diameters.
 - Current pins are temporary placeholders.
+
+## Circle Scale
+
+Taego is treated as an 8x8km map, so the map width equals 8000m.
+
+Circle diameter on the UI is calculated as:
+
+`circle diameter percent = phase diameter meters / 8000 * 100`
+
+Current phase diameter data:
+
+| Phase | Diameter |
+| --- | ---: |
+| 1 | 3994.1m |
+| 2 | 2396.5m |
+| 3 | 1318.1m |
+| 4 | 724.9m |
+| 5 | 362.5m |
+| 6 | 181.2m |
+| 7 | 90.6m |
+| 8 | 45.3m |
 
 ## Main Remaining Task
 

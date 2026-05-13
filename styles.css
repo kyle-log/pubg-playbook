@@ -28,6 +28,7 @@ body {
   background: #222;
   cursor: grab;
   touch-action: none;
+  user-select: none;
 }
 
 .map-viewport:active {
@@ -35,7 +36,9 @@ body {
 }
 
 .map-viewport.is-route-mode,
-.map-viewport.is-route-mode:active {
+.map-viewport.is-route-mode:active,
+.map-viewport.is-circle-mode,
+.map-viewport.is-circle-mode:active {
   cursor: crosshair;
 }
 
@@ -106,38 +109,89 @@ body {
   border-color: #4cc9f0;
 }
 
-.route-controls {
+.route-controls,
+.circle-controls {
   position: absolute;
   left: 12px;
-  top: 12px;
   z-index: 5;
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(10, 10, 10, 0.76);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
 }
 
-.route-control {
-  min-height: 34px;
-  padding: 0 11px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 6px;
-  background: rgba(12, 12, 12, 0.82);
+.route-controls {
+  top: 12px;
+}
+
+.circle-controls {
+  top: 54px;
+}
+
+.tool-button,
+.circle-phase {
+  height: 30px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
-  font: 700 13px/1 Arial, sans-serif;
+  font: 700 12px/1 Arial, sans-serif;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
 }
 
-.route-control:hover:not(:disabled),
-.route-control.is-active {
+.tool-button {
+  padding: 0 10px;
+}
+
+.circle-phase {
+  appearance: none;
+  width: 52px;
+  padding: 0 22px 0 9px;
+  border-radius: 4px;
+  background-image: linear-gradient(45deg, transparent 50%, #fff 50%),
+    linear-gradient(135deg, #fff 50%, transparent 50%);
+  background-position:
+    calc(100% - 13px) 13px,
+    calc(100% - 8px) 13px;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+.tool-button--clear {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 400;
+}
+
+.tool-button:hover:not(:disabled),
+.circle-phase:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.tool-button.is-active {
   background: rgba(235, 238, 240, 0.88);
-  border-color: rgba(255, 255, 255, 0.42);
   color: #151719;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+    0 0 0 1px rgba(0, 0, 0, 0.5);
 }
 
-.route-control:disabled {
+.tool-button.is-active:hover {
+  background: rgba(255, 255, 255, 0.96);
+  color: #111;
+}
+
+.tool-button:disabled,
+.circle-phase:disabled {
   cursor: default;
-  opacity: 0.42;
+  opacity: 0.36;
 }
 
 .zoom-controls {
@@ -227,6 +281,7 @@ body {
   object-fit: cover;
 }
 
+.circle-layer,
 .plane-route {
   position: absolute;
   inset: 0;
@@ -234,6 +289,45 @@ body {
   height: 100%;
   overflow: visible;
   pointer-events: none;
+}
+
+.safe-circle {
+  fill: rgba(255, 255, 255, 0.025);
+  stroke: rgba(245, 248, 250, 0.54);
+  stroke-width: calc(0.45px * var(--pin-scale));
+  filter: drop-shadow(0 0 calc(1px * var(--pin-scale)) rgba(0, 0, 0, 0.72));
+}
+
+.circle-handle {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  z-index: 2;
+  width: 16px;
+  height: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 999px;
+  background: rgba(12, 12, 12, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.62),
+    0 0 4px rgba(0, 0, 0, 0.74);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transform: translate(-50%, -50%) scale(var(--pin-scale));
+  transform-origin: center;
+  -webkit-user-drag: none;
+}
+
+.circle-handle::before {
+  content: "";
+  position: absolute;
+  inset: -8px -10px;
+  border-radius: 999px;
+}
+
+.circle-handle:active {
+  cursor: grabbing;
 }
 
 .plane-route__line {
@@ -353,29 +447,6 @@ body {
   border-color: rgba(199, 125, 255, 0.7);
 }
 
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  z-index: 10;
-  padding: 10px 14px;
-  border-radius: 6px;
-  background: rgba(20, 20, 20, 0.92);
-  color: #fff;
-  font-size: 14px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, 8px);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease;
-}
-
-.toast.is-visible {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
 @media (max-width: 520px) {
   .page {
     padding: 12px;
@@ -393,16 +464,29 @@ body {
     gap: 6px;
   }
 
-  .route-controls {
+  .route-controls,
+  .circle-controls {
     left: 8px;
-    top: 8px;
     max-width: calc(100% - 132px);
+    overflow-x: auto;
   }
 
-  .route-control {
-    min-height: 32px;
-    padding: 0 9px;
-    font-size: 12px;
+  .route-controls {
+    top: 8px;
+  }
+
+  .circle-controls {
+    top: 46px;
+  }
+
+  .tool-button,
+  .circle-phase {
+    height: 28px;
+    font-size: 11px;
+  }
+
+  .tool-button {
+    padding: 0 8px;
   }
 
   .zoom-controls {
