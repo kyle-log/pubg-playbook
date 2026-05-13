@@ -614,8 +614,6 @@
         8: 45.3,
       };
       let previewPin = null;
-      let isRouteMode = false;
-      let isCircleMode = false;
       let routePoints = [];
       let circles = [];
 
@@ -629,6 +627,9 @@
       let draggingCirclePhase = null;
       let draggingCircleOffsetX = 0;
       let draggingCircleOffsetY = 0;
+      let draggingRoutePointIndex = null;
+      let isDraggingRouteLine = false;
+      let draggingRouteLineOffsets = [];
       let startX = 0;
       let startY = 0;
       let pointerDownX = 0;
@@ -694,6 +695,8 @@
       function renderPlaneRoute() {
         planeRouteLayer.replaceChildren();
         mapWrap.querySelectorAll(".plane-route-marker").forEach((marker) => marker.remove());
+        routeDrawButton.classList.toggle("is-active", routePoints.length > 0);
+        routeDrawButton.setAttribute("aria-pressed", String(routePoints.length > 0));
 
         if (routePoints.length === 0) {
           return;
@@ -710,6 +713,14 @@
           line.setAttribute("x2", end.x);
           line.setAttribute("y2", end.y);
           fragment.append(line);
+
+          const hitLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          hitLine.classList.add("plane-route__hit-line");
+          hitLine.setAttribute("x1", start.x);
+          hitLine.setAttribute("y1", start.y);
+          hitLine.setAttribute("x2", end.x);
+          hitLine.setAttribute("y2", end.y);
+          fragment.append(hitLine);
         }
 
         planeRouteLayer.append(fragment);
@@ -729,15 +740,10 @@
         });
       }
 
-      function syncRouteControls() {
-        viewport.classList.toggle("is-route-mode", isRouteMode);
-        routeDrawButton.classList.toggle("is-active", isRouteMode);
-        routeDrawButton.setAttribute("aria-pressed", String(isRouteMode));
-      }
-
       function renderCircles() {
         circleLayer.replaceChildren();
-        mapWrap.querySelectorAll(".circle-handle").forEach((handle) => handle.remove());
+        circleDrawButton.classList.toggle("is-active", circles.length > 0);
+        circleDrawButton.setAttribute("aria-pressed", String(circles.length > 0));
 
         if (circles.length === 0) {
           return;
@@ -759,34 +765,23 @@
             circle.dataset.phase = zone.phase;
             fragment.append(circle);
 
-            const handleOffsetPercent = radius + 0.9;
-            const handle = document.createElement("span");
-            handle.className = "circle-handle";
-            handle.style.setProperty("--x", `${zone.x}%`);
-            handle.style.setProperty("--y", `${Math.max(0, zone.y - handleOffsetPercent)}%`);
-            handle.dataset.phase = zone.phase;
-            handle.title = `${zone.phase}페이즈 서클 이동`;
-            mapWrap.append(handle);
+            const hitCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            hitCircle.classList.add("safe-circle-hit");
+            hitCircle.setAttribute("cx", zone.x);
+            hitCircle.setAttribute("cy", zone.y);
+            hitCircle.setAttribute("r", radius.toFixed(3));
+            hitCircle.dataset.phase = zone.phase;
+            fragment.append(hitCircle);
           });
 
         circleLayer.append(fragment);
       }
 
-      function syncCircleControls() {
-        viewport.classList.toggle("is-circle-mode", isCircleMode);
-        circleDrawButton.classList.toggle("is-active", isCircleMode);
-        circleDrawButton.setAttribute("aria-pressed", String(isCircleMode));
-      }
-
-      function setRoutePoint(clientX, clientY) {
-        const nextPoint = getMapPoint(clientX, clientY);
-
-        if (routePoints.length >= 2) {
-          routePoints = [nextPoint];
-        } else {
-          routePoints = [...routePoints, nextPoint];
-        }
-
+      function setRouteAtViewportCenter() {
+        routePoints = [
+          { x: 4, y: 78 },
+          { x: 96, y: 22 },
+        ];
         renderPlaneRoute();
       }
 
@@ -797,6 +792,12 @@
         renderCircles();
       }
 
+      function setCircleAtViewportCenter() {
+        const rect = viewport.getBoundingClientRect();
+        const center = viewport.clientWidth / 2;
+        setCirclePoint(rect.left + center, rect.top + center);
+      }
+
       function moveCircle(phase, clientX, clientY) {
         const point = getMapPoint(clientX, clientY);
         const nextX = Math.min(100, Math.max(0, point.x - draggingCircleOffsetX));
@@ -805,6 +806,21 @@
           circle.phase === phase ? { ...circle, x: Number(nextX.toFixed(2)), y: Number(nextY.toFixed(2)) } : circle,
         );
         renderCircles();
+      }
+
+      function moveRoutePoint(index, clientX, clientY) {
+        const point = getMapPoint(clientX, clientY);
+        routePoints = routePoints.map((routePoint, routeIndex) => (routeIndex === index ? point : routePoint));
+        renderPlaneRoute();
+      }
+
+      function moveRouteLine(clientX, clientY) {
+        const point = getMapPoint(clientX, clientY);
+        routePoints = draggingRouteLineOffsets.map((offset) => ({
+          x: Number(Math.min(100, Math.max(0, point.x - offset.x)).toFixed(2)),
+          y: Number(Math.min(100, Math.max(0, point.y - offset.y)).toFixed(2)),
+        }));
+        renderPlaneRoute();
       }
 
       legend.addEventListener("pointerdown", (event) => {
@@ -834,23 +850,24 @@
         if (button.dataset.route === "draw") {
           if (routePoints.length > 0) {
             routePoints = [];
-            isRouteMode = false;
             renderPlaneRoute();
-            syncRouteControls();
             return;
           }
 
-          isRouteMode = !isRouteMode;
-          if (isRouteMode) {
-            isCircleMode = false;
-            syncCircleControls();
-          }
-          syncRouteControls();
+          setRouteAtViewportCenter();
         }
       });
 
       circleControls.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
+      });
+
+      circlePhaseSelect.addEventListener("change", () => {
+        if (circles.length === 0) return;
+        const phase = Number(circlePhaseSelect.value);
+        const currentCircle = circles[circles.length - 1];
+        circles = [{ ...currentCircle, phase }];
+        renderCircles();
       });
 
       circleControls.addEventListener("click", (event) => {
@@ -861,18 +878,11 @@
         if (button.dataset.circle === "draw") {
           if (circles.length > 0) {
             circles = [];
-            isCircleMode = false;
             renderCircles();
-            syncCircleControls();
             return;
           }
 
-          isCircleMode = !isCircleMode;
-          if (isCircleMode) {
-            isRouteMode = false;
-            syncRouteControls();
-          }
-          syncCircleControls();
+          setCircleAtViewportCenter();
         }
       });
 
@@ -940,7 +950,7 @@
         const rect = viewport.getBoundingClientRect();
         const pointerX = event.clientX - rect.left;
         const pointerY = event.clientY - rect.top;
-        zoomAt(scale + (event.deltaY < 0 ? 0.06 : -0.06), pointerX, pointerY);
+        zoomAt(scale + (event.deltaY < 0 ? 0.1 : -0.1), pointerX, pointerY);
       });
 
       zoomControls.addEventListener("pointerdown", (event) => {
@@ -1011,11 +1021,40 @@
       });
 
       viewport.addEventListener("pointerdown", (event) => {
-        const circleHandle = event.target.closest(".circle-handle");
-        if (circleHandle) {
+        const routeLine = event.target.closest(".plane-route__hit-line");
+        if (routeLine) {
           event.preventDefault();
           event.stopPropagation();
-          const phase = Number(circleHandle.dataset.phase);
+          const point = getMapPoint(event.clientX, event.clientY);
+          isDraggingRouteLine = true;
+          draggingRouteLineOffsets = routePoints.map((routePoint) => ({
+            x: point.x - routePoint.x,
+            y: point.y - routePoint.y,
+          }));
+          didMove = false;
+          viewport.setPointerCapture(event.pointerId);
+          pointerDownX = event.clientX;
+          pointerDownY = event.clientY;
+          return;
+        }
+
+        const routeMarker = event.target.closest(".plane-route-marker");
+        if (routeMarker) {
+          event.preventDefault();
+          event.stopPropagation();
+          draggingRoutePointIndex = routeMarker.dataset.point === "start" ? 0 : 1;
+          didMove = false;
+          viewport.setPointerCapture(event.pointerId);
+          pointerDownX = event.clientX;
+          pointerDownY = event.clientY;
+          return;
+        }
+
+        const circleHit = event.target.closest(".safe-circle-hit");
+        if (circleHit) {
+          event.preventDefault();
+          event.stopPropagation();
+          const phase = Number(circleHit.dataset.phase);
           const circle = circles.find((zone) => zone.phase === phase);
           if (!circle) return;
           const point = getMapPoint(event.clientX, event.clientY);
@@ -1029,25 +1068,10 @@
           return;
         }
 
-        if (isCircleMode) {
-          didMove = false;
-          viewport.setPointerCapture(event.pointerId);
-          pointerDownX = event.clientX;
-          pointerDownY = event.clientY;
-          return;
-        }
-
-        if (isRouteMode) {
-          didMove = false;
-          viewport.setPointerCapture(event.pointerId);
-          pointerDownX = event.clientX;
-          pointerDownY = event.clientY;
-          return;
-        }
-
         isDragging = true;
         didMove = false;
         shouldPlacePin = event.altKey;
+        viewport.classList.add("is-panning");
         viewport.setPointerCapture(event.pointerId);
         startX = event.clientX - x;
         startY = event.clientY - y;
@@ -1056,23 +1080,27 @@
       });
 
       viewport.addEventListener("pointermove", (event) => {
+        if (isDraggingRouteLine) {
+          event.preventDefault();
+          const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
+          didMove = didMove || moveDistance > 2;
+          moveRouteLine(event.clientX, event.clientY);
+          return;
+        }
+
+        if (draggingRoutePointIndex !== null) {
+          event.preventDefault();
+          const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
+          didMove = didMove || moveDistance > 2;
+          moveRoutePoint(draggingRoutePointIndex, event.clientX, event.clientY);
+          return;
+        }
+
         if (draggingCirclePhase !== null) {
           event.preventDefault();
           const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
           didMove = didMove || moveDistance > 2;
           moveCircle(draggingCirclePhase, event.clientX, event.clientY);
-          return;
-        }
-
-        if (isCircleMode) {
-          const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
-          didMove = didMove || moveDistance > 4;
-          return;
-        }
-
-        if (isRouteMode) {
-          const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
-          didMove = didMove || moveDistance > 4;
           return;
         }
 
@@ -1085,6 +1113,21 @@
       });
 
       viewport.addEventListener("pointerup", (event) => {
+        if (isDraggingRouteLine) {
+          event.preventDefault();
+          isDraggingRouteLine = false;
+          draggingRouteLineOffsets = [];
+          didMove = false;
+          return;
+        }
+
+        if (draggingRoutePointIndex !== null) {
+          event.preventDefault();
+          draggingRoutePointIndex = null;
+          didMove = false;
+          return;
+        }
+
         if (draggingCirclePhase !== null) {
           event.preventDefault();
           draggingCirclePhase = null;
@@ -1094,23 +1137,8 @@
           return;
         }
 
-        if (isCircleMode) {
-          if (!didMove) {
-            setCirclePoint(event.clientX, event.clientY);
-          }
-          didMove = false;
-          return;
-        }
-
-        if (isRouteMode) {
-          if (!didMove) {
-            setRoutePoint(event.clientX, event.clientY);
-          }
-          didMove = false;
-          return;
-        }
-
         isDragging = false;
+        viewport.classList.remove("is-panning");
         if (shouldPlacePin && !didMove) {
           setPreviewPin(event.clientX, event.clientY);
         }
@@ -1118,14 +1146,17 @@
       });
 
       viewport.addEventListener("pointercancel", () => {
+        isDragging = false;
+        viewport.classList.remove("is-panning");
+        isDraggingRouteLine = false;
+        draggingRouteLineOffsets = [];
+        draggingRoutePointIndex = null;
         draggingCirclePhase = null;
         draggingCircleOffsetX = 0;
         draggingCircleOffsetY = 0;
       });
 
       syncLegendState();
-      syncRouteControls();
-      syncCircleControls();
       renderPins();
       renderCircles();
       renderPlaneRoute();
