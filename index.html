@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Taego Safe Pins</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="map-viewport" aria-label="Taego safe position map">
+        <aside class="legend" aria-label="핀 색상 범례">
+          <button class="legend__item" type="button" data-filter="safe" aria-pressed="true">
+            <span class="legend__dot legend__dot--safe" aria-hidden="true"></span>
+            <span>좋은 자리</span>
+          </button>
+          <button class="legend__item" type="button" data-filter="fixed-vehicle" aria-pressed="true">
+            <span class="legend__dot legend__dot--fixed-vehicle" aria-hidden="true"></span>
+            <span>고정차</span>
+          </button>
+          <button class="legend__item" type="button" data-filter="garage" aria-pressed="true">
+            <span class="legend__dot legend__dot--garage" aria-hidden="true"></span>
+            <span>차고</span>
+          </button>
+          <button class="legend__item" type="button" data-filter="secret-room" aria-pressed="true">
+            <span class="legend__dot legend__dot--secret-room" aria-hidden="true"></span>
+            <span>비밀의방</span>
+          </button>
+        </aside>
+        <div class="map-wrap" id="mapWrap">
+          <img class="map" src="assets/taego-map-high.jpg" alt="PUBG Taego map" draggable="false" />
+        </div>
+        <div class="zoom-controls" aria-label="지도 확대 축소">
+          <button class="zoom-control" type="button" data-zoom="in" aria-label="확대">+</button>
+          <button class="zoom-control" type="button" data-zoom="out" aria-label="축소">-</button>
+          <button class="zoom-control zoom-control--reset" type="button" data-zoom="reset" aria-label="확대 초기화">1x</button>
+        </div>
+        <div class="minimap" aria-label="현재 지도 위치 미니맵">
+          <img class="minimap__map" src="assets/taego-map-high.jpg" alt="" draggable="false" />
+          <span class="minimap__viewport" aria-hidden="true"></span>
+        </div>
+      </section>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script>
+      const viewport = document.querySelector(".map-viewport");
+      const legend = document.querySelector(".legend");
+      const mapWrap = document.querySelector("#mapWrap");
+      const toast = document.querySelector("#toast");
+      const zoomControls = document.querySelector(".zoom-controls");
+      const zoomButtons = document.querySelectorAll(".zoom-control");
+      const minimap = document.querySelector(".minimap");
+      const minimapViewport = document.querySelector(".minimap__viewport");
+      const visiblePinFilters = {
+        safe: true,
+        "fixed-vehicle": true,
+        garage: true,
+        "secret-room": true,
+        preview: true,
+      };
+      const safePins = [
+        {
+          name: "용천 해안가 해우소",
+          type: "safe",
+          x: 55.39,
+          y: 33.41,
+        },
+        {
+          name: "용천 우측 다리 골",
+          type: "safe",
+          x: 66.57,
+          y: 30.2,
+        },
+        {
+          name: "터미널 민가 골",
+          type: "safe",
+          x: 63.05,
+          y: 35.92,
+        },
+        {
+          name: "고차집 좌측골",
+          type: "safe",
+          x: 62.2,
+          y: 46.39,
+        },
+        {
+          name: "고차집 우측골",
+          type: "safe",
+          x: 66.66,
+          y: 47.62,
+        },
+        {
+          name: "호산 우측 벙커",
+          type: "safe",
+          x: 52.42,
+          y: 61,
+        },
+        {
+          name: "호산 우측 벙커 2",
+          type: "safe",
+          x: 50.78,
+          y: 57.6,
+        },
+        {
+          name: "호산 우측 벙커 3",
+          type: "safe",
+          x: 50.4,
+          y: 56.26,
+        },
+        {
+          name: "호산 우측 벙커 4",
+          type: "safe",
+          x: 50.56,
+          y: 53.96,
+        },
+        {
+          name: "강릉 능선",
+          type: "safe",
+          x: 75.07,
+          y: 59.38,
+        },
+        {
+          name: "북산사 밑 골",
+          type: "safe",
+          x: 63.94,
+          y: 68.79,
+        },
+        {
+          name: "피싱캠프 따개비",
+          type: "safe",
+          x: 26.36,
+          y: 51.48,
+        },
+        {
+          name: "송암 창고 골",
+          type: "safe",
+          x: 48.58,
+          y: 78.44,
+        },
+        {
+          name: "고정차 01 - Army Base 북서쪽",
+          type: "fixed-vehicle",
+          x: 34.11,
+          y: 10.34,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 02 - Shipyard 동쪽 산길",
+          type: "fixed-vehicle",
+          x: 80.04,
+          y: 23.09,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 03 - Go Dok 북동쪽 능선길",
+          type: "fixed-vehicle",
+          x: 34.77,
+          y: 25.21,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 04 - Yong Cheon 서쪽",
+          type: "fixed-vehicle",
+          x: 54.02,
+          y: 28.72,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 05 - Shipyard 남동쪽 능선",
+          type: "fixed-vehicle",
+          x: 71.74,
+          y: 32.06,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 06 - Go Dok 서남쪽 도로",
+          type: "fixed-vehicle",
+          x: 24.34,
+          y: 36.98,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 07 - Airport 북서쪽",
+          type: "fixed-vehicle",
+          x: 88.47,
+          y: 37.01,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 08 - Airport 서쪽 도로",
+          type: "fixed-vehicle",
+          x: 87.73,
+          y: 41.81,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 09 - Palace 북서쪽 도로",
+          type: "fixed-vehicle",
+          x: 29.35,
+          y: 47.61,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 10 - Ha Po 북동쪽 도로",
+          type: "fixed-vehicle",
+          x: 18.61,
+          y: 47.66,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 11 - Terminal 북동쪽",
+          type: "fixed-vehicle",
+          x: 64.6,
+          y: 47.89,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 12 - Kang Neung 북서쪽 강변",
+          type: "fixed-vehicle",
+          x: 71.76,
+          y: 52.15,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 13 - Ha Po 동쪽 순환도로",
+          type: "fixed-vehicle",
+          x: 17.82,
+          y: 57.34,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 14 - Fishing Camp 북서쪽",
+          type: "fixed-vehicle",
+          x: 30.18,
+          y: 58.47,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 15 - Ho San 남동쪽 중앙도로",
+          type: "fixed-vehicle",
+          x: 51.71,
+          y: 59.09,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 16 - Ho San 북동쪽 농로",
+          type: "fixed-vehicle",
+          x: 35.91,
+          y: 67.14,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 17 - Kang Neung 북쪽 강변",
+          type: "fixed-vehicle",
+          x: 72.41,
+          y: 68.34,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 18 - Ho San Prison 북동쪽",
+          type: "fixed-vehicle",
+          x: 25.77,
+          y: 70.9,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 19 - Oh Hyang 북동쪽",
+          type: "fixed-vehicle",
+          x: 79.92,
+          y: 73.17,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 20 - Buk San Sa 서쪽 도로",
+          type: "fixed-vehicle",
+          x: 58.51,
+          y: 74.22,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 21 - Song Am 북동쪽",
+          type: "fixed-vehicle",
+          x: 52.57,
+          y: 80.78,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 22 - Ho San Prison 동쪽",
+          type: "fixed-vehicle",
+          x: 25.05,
+          y: 81.87,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 23 - School 북쪽",
+          type: "fixed-vehicle",
+          x: 38.98,
+          y: 83.21,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "고정차 24 - Oh Hyang 남동쪽 해안도로",
+          type: "fixed-vehicle",
+          x: 72.44,
+          y: 92.21,
+          sourceUrl: "https://namu.moe/w/PUBG%3A%20BATTLEGROUNDS/e%EC%8A%A4%ED%8F%AC%EC%B8%A0",
+        },
+        {
+          name: "차고 01 - Hae Moo Sa",
+          type: "garage",
+          x: 15.69,
+          y: 30.53,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 02 - Wol Song",
+          type: "garage",
+          x: 19.84,
+          y: 18.93,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 03 - Go Dok 1",
+          type: "garage",
+          x: 29.12,
+          y: 28.57,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 04 - Go Dok 2",
+          type: "garage",
+          x: 31.56,
+          y: 29.18,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 05 - Army Base",
+          type: "garage",
+          x: 46.95,
+          y: 11.48,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 06 - Palace",
+          type: "garage",
+          x: 38.77,
+          y: 46.52,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 07 - Go Dok ~ Yong Cheon 삼거리",
+          type: "garage",
+          x: 42.8,
+          y: 34.68,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 08 - Yong Cheon",
+          type: "garage",
+          x: 57.57,
+          y: 29.43,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 09 - West Shipyard",
+          type: "garage",
+          x: 63.43,
+          y: 17.7,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 10 - East Shipyard ~ Airport 사이",
+          type: "garage",
+          x: 86.02,
+          y: 20.15,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 11 - East Shipyard",
+          type: "garage",
+          x: 76.13,
+          y: 18.07,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 12 - Airport",
+          type: "garage",
+          x: 89.44,
+          y: 38.46,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 13 - Studio",
+          type: "garage",
+          x: 68.32,
+          y: 82.3,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 14 - Oh Hyang",
+          type: "garage",
+          x: 71.86,
+          y: 72.41,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 15 - Buk San Sa",
+          type: "garage",
+          x: 63.68,
+          y: 64.22,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 16 - Kang Neung",
+          type: "garage",
+          x: 79.43,
+          y: 55.31,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 17 - Terminal",
+          type: "garage",
+          x: 57.33,
+          y: 44.57,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 18 - Song Am",
+          type: "garage",
+          x: 49.15,
+          y: 83.52,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 19 - School",
+          type: "garage",
+          x: 39.01,
+          y: 80.34,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 20 - Ho San 1",
+          type: "garage",
+          x: 43.53,
+          y: 60.32,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 21 - Ho San 2",
+          type: "garage",
+          x: 41.09,
+          y: 63.61,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 22 - Fishing Camp",
+          type: "garage",
+          x: 31.93,
+          y: 51.77,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 23 - Ho San Prison",
+          type: "garage",
+          x: 22.41,
+          y: 71.31,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "차고 24 - Ha Po",
+          type: "garage",
+          x: 8.12,
+          y: 55.43,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EC%B0%A8%EB%9F%89-%EA%B3%A0%EC%A0%95-%EC%8A%A4%ED%8F%B0-2025",
+        },
+        {
+          name: "비밀의방 01",
+          type: "secret-room",
+          x: 17.03,
+          y: 14.35,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 02",
+          type: "secret-room",
+          x: 31.81,
+          y: 16.36,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 03",
+          type: "secret-room",
+          x: 43.89,
+          y: 23.63,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 04",
+          type: "secret-room",
+          x: 59.1,
+          y: 20.45,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 05",
+          type: "secret-room",
+          x: 84.8,
+          y: 25.46,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 06",
+          type: "secret-room",
+          x: 87.3,
+          y: 41.45,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 07",
+          type: "secret-room",
+          x: 73.93,
+          y: 47.99,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 08",
+          type: "secret-room",
+          x: 15.08,
+          y: 33.52,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 09",
+          type: "secret-room",
+          x: 12.39,
+          y: 41.45,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 10",
+          type: "secret-room",
+          x: 11.66,
+          y: 63.86,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 11",
+          type: "secret-room",
+          x: 54.21,
+          y: 60.74,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 12",
+          type: "secret-room",
+          x: 78.14,
+          y: 68.32,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 13",
+          type: "secret-room",
+          x: 29.79,
+          y: 79.18,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 14",
+          type: "secret-room",
+          x: 60.62,
+          y: 78.33,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+        {
+          name: "비밀의방 15",
+          type: "secret-room",
+          x: 77.59,
+          y: 87.85,
+          sourceUrl: "https://w0njay.tistory.com/entry/%EB%B0%B0%ED%8B%80%EA%B7%B8%EB%9D%BC%EC%9A%B4%EB%93%9C-%ED%83%9C%EC%9D%B4%EA%B3%A0-%EB%B9%84%EB%B0%80%EC%9D%98-%EB%B0%A9-2025",
+        },
+      ];
+      let previewPin = null;
+
+      let scale = 1;
+      let x = 0;
+      let y = 0;
+      let isDragging = false;
+      let didMove = false;
+      let shouldPlacePin = false;
+      let isMinimapDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let pointerDownX = 0;
+      let pointerDownY = 0;
+
+      function getCopyText(pin) {
+        return JSON.stringify(
+          {
+            x: pin.x,
+            y: pin.y,
+          },
+          null,
+          2,
+        );
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add("is-visible");
+        window.clearTimeout(showToast.timeoutId);
+        showToast.timeoutId = window.setTimeout(() => {
+          toast.classList.remove("is-visible");
+        }, 1200);
+      }
+
+      function getPinFilter(pin) {
+        return pin.status === "preview" ? "preview" : pin.type || "safe";
+      }
+
+      function syncLegendState() {
+        legend.querySelectorAll(".legend__item").forEach((button) => {
+          const isActive = visiblePinFilters[button.dataset.filter];
+          button.classList.toggle("is-off", !isActive);
+          button.setAttribute("aria-pressed", String(isActive));
+        });
+      }
+
+      function renderPins() {
+        mapWrap.querySelectorAll(".pin").forEach((pin) => pin.remove());
+        const fragment = document.createDocumentFragment();
+        const visiblePins = (previewPin ? [...safePins, previewPin] : safePins).filter(
+          (pin) => visiblePinFilters[getPinFilter(pin)],
+        );
+
+        visiblePins.forEach((pin) => {
+          const pinElement = document.createElement("span");
+          pinElement.className = "pin";
+          pinElement.style.setProperty("--x", `${pin.x}%`);
+          pinElement.style.setProperty("--y", `${pin.y}%`);
+          pinElement.title = `${pin.name || "이름 없음"}\nx: ${pin.x}, y: ${pin.y}`;
+          pinElement.dataset.status = pin.status || "saved";
+          pinElement.dataset.type = pin.type || "safe";
+          fragment.append(pinElement);
+        });
+
+        mapWrap.append(fragment);
+      }
+
+      legend.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+
+      legend.addEventListener("click", (event) => {
+        const button = event.target.closest(".legend__item");
+        if (!button) return;
+        event.stopPropagation();
+
+        const filter = button.dataset.filter;
+        visiblePinFilters[filter] = !visiblePinFilters[filter];
+        syncLegendState();
+        renderPins();
+      });
+
+      async function setPreviewPin(clientX, clientY) {
+        const rect = viewport.getBoundingClientRect();
+        const mapX = (clientX - rect.left - x) / scale;
+        const mapY = (clientY - rect.top - y) / scale;
+        const percentX = Math.min(100, Math.max(0, (mapX / rect.width) * 100));
+        const percentY = Math.min(100, Math.max(0, (mapY / rect.height) * 100));
+
+        previewPin = {
+          x: Number(percentX.toFixed(2)),
+          y: Number(percentY.toFixed(2)),
+          status: "preview",
+        };
+        renderPins();
+        try {
+          await navigator.clipboard.writeText(getCopyText(previewPin));
+          showToast("좌표 복사됨");
+        } catch {
+          showToast("좌표 복사 실패");
+        }
+      }
+
+      function clampPosition() {
+        const size = viewport.clientWidth;
+        const scaledSize = size * scale;
+
+        if (scaledSize <= size) {
+          x = (size - scaledSize) / 2;
+          y = (size - scaledSize) / 2;
+          return;
+        }
+
+        x = Math.min(0, Math.max(size - scaledSize, x));
+        y = Math.min(0, Math.max(size - scaledSize, y));
+      }
+
+      function render() {
+        clampPosition();
+        mapWrap.style.setProperty("--pin-scale", 1 / scale);
+        mapWrap.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+        renderMinimap();
+        zoomButtons.forEach((button) => {
+          const action = button.dataset.zoom;
+          button.disabled =
+            (action === "in" && scale >= 5) ||
+            (action === "out" && scale <= 1) ||
+            (action === "reset" && scale === 1);
+        });
+      }
+
+      function zoomAt(nextScale, originX, originY) {
+        const mapX = (originX - x) / scale;
+        const mapY = (originY - y) / scale;
+
+        scale = Number(Math.min(5, Math.max(1, nextScale)).toFixed(2));
+        x = originX - mapX * scale;
+        y = originY - mapY * scale;
+        render();
+      }
+
+      function zoomFromCenter(delta) {
+        const center = viewport.clientWidth / 2;
+        zoomAt(scale + delta, center, center);
+      }
+
+      viewport.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const pointerX = event.clientX - rect.left;
+        const pointerY = event.clientY - rect.top;
+        zoomAt(scale + (event.deltaY < 0 ? 0.06 : -0.06), pointerX, pointerY);
+      });
+
+      zoomControls.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+
+      zoomControls.addEventListener("click", (event) => {
+        const button = event.target.closest(".zoom-control");
+        if (!button) return;
+        event.stopPropagation();
+
+        if (button.dataset.zoom === "in") {
+          zoomFromCenter(0.3);
+        } else if (button.dataset.zoom === "out") {
+          zoomFromCenter(-0.3);
+        } else {
+          scale = 1;
+          x = 0;
+          y = 0;
+          render();
+        }
+      });
+
+      function renderMinimap() {
+        const size = viewport.clientWidth;
+        const viewSize = 100 / scale;
+        const left = Math.min(100 - viewSize, Math.max(0, (-x / scale / size) * 100));
+        const top = Math.min(100 - viewSize, Math.max(0, (-y / scale / size) * 100));
+
+        minimapViewport.style.width = `${viewSize}%`;
+        minimapViewport.style.height = `${viewSize}%`;
+        minimapViewport.style.left = `${left}%`;
+        minimapViewport.style.top = `${top}%`;
+      }
+
+      function moveMapToMinimapPoint(clientX, clientY) {
+        const minimapRect = minimap.getBoundingClientRect();
+        const size = viewport.clientWidth;
+        const percentX = Math.min(1, Math.max(0, (clientX - minimapRect.left) / minimapRect.width));
+        const percentY = Math.min(1, Math.max(0, (clientY - minimapRect.top) / minimapRect.height));
+
+        x = size / 2 - percentX * size * scale;
+        y = size / 2 - percentY * size * scale;
+        render();
+      }
+
+      minimap.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        isMinimapDragging = true;
+        minimap.setPointerCapture(event.pointerId);
+        moveMapToMinimapPoint(event.clientX, event.clientY);
+      });
+
+      minimap.addEventListener("pointermove", (event) => {
+        if (!isMinimapDragging) return;
+        event.preventDefault();
+        moveMapToMinimapPoint(event.clientX, event.clientY);
+      });
+
+      minimap.addEventListener("pointerup", (event) => {
+        event.stopPropagation();
+        isMinimapDragging = false;
+      });
+
+      minimap.addEventListener("pointercancel", () => {
+        isMinimapDragging = false;
+      });
+
+      viewport.addEventListener("pointerdown", (event) => {
+        isDragging = true;
+        didMove = false;
+        shouldPlacePin = event.altKey;
+        viewport.setPointerCapture(event.pointerId);
+        startX = event.clientX - x;
+        startY = event.clientY - y;
+        pointerDownX = event.clientX;
+        pointerDownY = event.clientY;
+      });
+
+      viewport.addEventListener("pointermove", (event) => {
+        if (!isDragging) return;
+        const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
+        didMove = didMove || moveDistance > 4;
+        x = event.clientX - startX;
+        y = event.clientY - startY;
+        render();
+      });
+
+      viewport.addEventListener("pointerup", (event) => {
+        isDragging = false;
+        if (shouldPlacePin && !didMove) {
+          setPreviewPin(event.clientX, event.clientY);
+        }
+        shouldPlacePin = false;
+      });
+
+      syncLegendState();
+      renderPins();
+      render();
+    </script>
+  </body>
+</html>
