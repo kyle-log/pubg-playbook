@@ -287,10 +287,6 @@ body {
   pointer-events: auto;
 }
 
-.plane-route {
-  pointer-events: auto;
-}
-
 .safe-circle {
   fill: rgba(255, 255, 255, 0.025);
   stroke: rgba(245, 248, 250, 0.54);
@@ -300,10 +296,11 @@ body {
 
 .safe-circle-hit {
   fill: none;
-  stroke: transparent;
-  stroke-width: calc(12px * var(--pin-scale));
+  stroke: rgba(255, 255, 255, 0.001);
+  stroke-width: 18px;
   cursor: grab;
-  pointer-events: stroke;
+  pointer-events: visibleStroke;
+  vector-effect: non-scaling-stroke;
 }
 
 .plane-route__line {
@@ -316,11 +313,12 @@ body {
 
 .plane-route__hit-line {
   fill: none;
-  stroke: transparent;
-  stroke-width: calc(14px * var(--pin-scale));
+  stroke: rgba(255, 255, 255, 0.001);
+  stroke-width: 18px;
   stroke-linecap: round;
   cursor: grab;
-  pointer-events: stroke;
+  pointer-events: visibleStroke;
+  vector-effect: non-scaling-stroke;
 }
 
 .pin {

@@ -720,6 +720,7 @@
           hitLine.setAttribute("y1", start.y);
           hitLine.setAttribute("x2", end.x);
           hitLine.setAttribute("y2", end.y);
+          hitLine.setAttribute("pointer-events", "visibleStroke");
           fragment.append(hitLine);
         }
 
@@ -770,6 +771,7 @@
             hitCircle.setAttribute("cx", zone.x);
             hitCircle.setAttribute("cy", zone.y);
             hitCircle.setAttribute("r", radius.toFixed(3));
+            hitCircle.setAttribute("pointer-events", "visibleStroke");
             hitCircle.dataset.phase = zone.phase;
             fragment.append(hitCircle);
           });
