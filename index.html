@@ -29,6 +29,11 @@
         </aside>
         <div class="map-wrap" id="mapWrap">
           <img class="map" src="assets/taego-map-high.jpg" alt="PUBG Taego map" draggable="false" />
+          <svg class="plane-route" viewBox="0 0 100 100" aria-hidden="true"></svg>
+        </div>
+        <div class="route-controls" aria-label="비행기 경로">
+          <button class="route-control" type="button" data-route="draw" aria-pressed="false">비행기 경로</button>
+          <button class="route-control" type="button" data-route="clear" disabled>초기화</button>
         </div>
         <div class="zoom-controls" aria-label="지도 확대 축소">
           <button class="zoom-control" type="button" data-zoom="in" aria-label="확대">+</button>
@@ -46,6 +51,10 @@
       const viewport = document.querySelector(".map-viewport");
       const legend = document.querySelector(".legend");
       const mapWrap = document.querySelector("#mapWrap");
+      const planeRouteLayer = document.querySelector(".plane-route");
+      const routeControls = document.querySelector(".route-controls");
+      const routeDrawButton = document.querySelector('[data-route="draw"]');
+      const routeClearButton = document.querySelector('[data-route="clear"]');
       const toast = document.querySelector("#toast");
       const zoomControls = document.querySelector(".zoom-controls");
       const zoomButtons = document.querySelectorAll(".zoom-control");
@@ -580,6 +589,8 @@
         },
       ];
       let previewPin = null;
+      let isRouteMode = false;
+      let routePoints = [];
 
       let scale = 1;
       let x = 0;
@@ -611,6 +622,19 @@
         showToast.timeoutId = window.setTimeout(() => {
           toast.classList.remove("is-visible");
         }, 1200);
+      }
+
+      function getMapPoint(clientX, clientY) {
+        const rect = viewport.getBoundingClientRect();
+        const mapX = (clientX - rect.left - x) / scale;
+        const mapY = (clientY - rect.top - y) / scale;
+        const percentX = Math.min(100, Math.max(0, (mapX / rect.width) * 100));
+        const percentY = Math.min(100, Math.max(0, (mapY / rect.height) * 100));
+
+        return {
+          x: Number(percentX.toFixed(2)),
+          y: Number(percentY.toFixed(2)),
+        };
       }
 
       function getPinFilter(pin) {
@@ -646,6 +670,66 @@
         mapWrap.append(fragment);
       }
 
+      function renderPlaneRoute() {
+        planeRouteLayer.replaceChildren();
+        mapWrap.querySelectorAll(".plane-route-marker").forEach((marker) => marker.remove());
+
+        if (routePoints.length === 0) {
+          routeClearButton.disabled = true;
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+
+        if (routePoints.length === 2) {
+          const [start, end] = routePoints;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.classList.add("plane-route__line");
+          line.setAttribute("x1", start.x);
+          line.setAttribute("y1", start.y);
+          line.setAttribute("x2", end.x);
+          line.setAttribute("y2", end.y);
+          fragment.append(line);
+        }
+
+        planeRouteLayer.append(fragment);
+        routePoints.forEach((point, index) => {
+          const marker = document.createElement("span");
+          marker.className = "plane-route-marker";
+          marker.style.setProperty("--x", `${point.x}%`);
+          marker.style.setProperty("--y", `${point.y}%`);
+          marker.dataset.point = index === 0 ? "start" : "end";
+          if (index === 1 && routePoints.length === 2) {
+            const [start, end] = routePoints;
+            const angle = Math.atan2(end.y - start.y, end.x - start.x) * (180 / Math.PI);
+            marker.style.setProperty("--route-angle", `${angle}deg`);
+          }
+          marker.title = index === 0 ? "비행기 시작점" : "비행기 끝점";
+          mapWrap.append(marker);
+        });
+        routeClearButton.disabled = false;
+      }
+
+      function syncRouteControls() {
+        viewport.classList.toggle("is-route-mode", isRouteMode);
+        routeDrawButton.classList.toggle("is-active", isRouteMode);
+        routeDrawButton.setAttribute("aria-pressed", String(isRouteMode));
+      }
+
+      function setRoutePoint(clientX, clientY) {
+        const nextPoint = getMapPoint(clientX, clientY);
+
+        if (routePoints.length >= 2) {
+          routePoints = [nextPoint];
+          showToast("시작점 지정됨");
+        } else {
+          routePoints = [...routePoints, nextPoint];
+          showToast(routePoints.length === 1 ? "시작점 지정됨" : "비행기 경로 지정됨");
+        }
+
+        renderPlaneRoute();
+      }
+
       legend.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
       });
@@ -661,16 +745,33 @@
         renderPins();
       });
 
+      routeControls.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+
+      routeControls.addEventListener("click", (event) => {
+        const button = event.target.closest(".route-control");
+        if (!button) return;
+        event.stopPropagation();
+
+        if (button.dataset.route === "draw") {
+          isRouteMode = !isRouteMode;
+          syncRouteControls();
+          showToast(isRouteMode ? "시작점과 끝점을 찍으세요" : "경로 모드 꺼짐");
+          return;
+        }
+
+        routePoints = [];
+        renderPlaneRoute();
+        showToast("비행기 경로 초기화됨");
+      });
+
       async function setPreviewPin(clientX, clientY) {
-        const rect = viewport.getBoundingClientRect();
-        const mapX = (clientX - rect.left - x) / scale;
-        const mapY = (clientY - rect.top - y) / scale;
-        const percentX = Math.min(100, Math.max(0, (mapX / rect.width) * 100));
-        const percentY = Math.min(100, Math.max(0, (mapY / rect.height) * 100));
+        const point = getMapPoint(clientX, clientY);
 
         previewPin = {
-          x: Number(percentX.toFixed(2)),
-          y: Number(percentY.toFixed(2)),
+          x: point.x,
+          y: point.y,
           status: "preview",
         };
         renderPins();
@@ -801,6 +902,14 @@
       });
 
       viewport.addEventListener("pointerdown", (event) => {
+        if (isRouteMode) {
+          didMove = false;
+          viewport.setPointerCapture(event.pointerId);
+          pointerDownX = event.clientX;
+          pointerDownY = event.clientY;
+          return;
+        }
+
         isDragging = true;
         didMove = false;
         shouldPlacePin = event.altKey;
@@ -812,6 +921,12 @@
       });
 
       viewport.addEventListener("pointermove", (event) => {
+        if (isRouteMode) {
+          const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
+          didMove = didMove || moveDistance > 4;
+          return;
+        }
+
         if (!isDragging) return;
         const moveDistance = Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY);
         didMove = didMove || moveDistance > 4;
@@ -821,6 +936,14 @@
       });
 
       viewport.addEventListener("pointerup", (event) => {
+        if (isRouteMode) {
+          if (!didMove) {
+            setRoutePoint(event.clientX, event.clientY);
+          }
+          didMove = false;
+          return;
+        }
+
         isDragging = false;
         if (shouldPlacePin && !didMove) {
           setPreviewPin(event.clientX, event.clientY);
@@ -829,7 +952,9 @@
       });
 
       syncLegendState();
+      syncRouteControls();
       renderPins();
+      renderPlaneRoute();
       render();
     </script>
   </body>
